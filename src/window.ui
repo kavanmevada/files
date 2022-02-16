@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="Window" parent="GtkWindow">
+    <property name="default-width">600</property>
+    <property name="default-height">300</property>
+    <property name="title">Files</property>
+
+
+    <binding name="selected-view">
+      <lookup name="child" type="AdwTabPage">
+        <lookup name="selected-page">tab-view</lookup>
+      </lookup>
+    </binding>
+
+    <binding name="selected-view-path">
+      <lookup name="path" type="BrowserView">
+          <lookup name="selected-view">Window</lookup>
+      </lookup>
+    </binding>
+
+    <binding name="selection-model">
+      <lookup name="model" type="BrowserView">
+          <lookup name="selected-view">Window</lookup>
+      </lookup>
+    </binding>
+
+
+
+    <child type="titlebar">
+      <object class="GtkHeaderBar" id="headerbar">
+        <property name="show-title-buttons">True</property>
+
+        <child type="title">
+          <object class="GtkSearchEntry" id="entry_a">
+            <property name="width-request">300</property>
+            <signal name="search-changed" handler="search_entry_changed" swapped="true"/>
+            <signal name="search-started" handler="search_started" swapped="true"/>
+            <signal name="stop-search" handler="search_stopped" swapped="true"/>
+          </object>
+        </child>
+
+
+        <child type="end">
+          <object class="GtkMenuButton">
+            <property name="receives-default">True</property>
+            <property name="menu-model">appmenu</property>
+            <property name="icon-name">open-menu-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Menu</property>
+          </object>
+        </child>
+
+
+        <child type="end">
+          <object class="AdwStackButton">
+            <binding name="stack">
+              <lookup name="stack" type="BrowserView">
+                <lookup name="child" type="AdwTabPage">
+                    <lookup name="selected-page">tab-view</lookup>
+                </lookup>
+              </lookup>
+            </binding>
+            <property name="menu-model">sort_menu</property>
+          </object>
+        </child>
+
+         <child type="end">
+          <object class="GtkMenuButton">
+            <property name="valign">center</property>
+            <property name="halign">center</property>
+            <binding name="visible">
+              <lookup name="has-process" type="Application">
+                <lookup name="application">Window</lookup>
+              </lookup>
+            </binding>
+            <property name="popover">
+              <object class="GtkPopover">
+                <property name="width-request">300</property>
+                <property name="child">
+                  <object class="GtkListView">
+                    <property name="factory">
+                      <object class="GtkSignalListItemFactory">
+                        <signal name="setup" handler="factory_setup" swapped="true"/>
+                      </object>
+                    </property>
+                    <style>
+                      <class name="navigation-sidebar"/>
+                    </style>
+                    <property name="model">
+                      <object class="GtkNoSelection">
+                        <property name="model">
+                          <object class="GtkSortListModel">
+                            <binding name="model">
+                              <lookup name="processes-store" type="Application">
+                                <lookup name="application">Window</lookup>
+                              </lookup>
+                            </binding>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </property>
+            <property name="child">
+              <object class="GtkLabel">
+                <binding name="label">
+                  <lookup name="n-process-str" type="Application">
+                    <lookup name="application">Window</lookup>
+                  </lookup>
+                </binding>
+              </object>
+            </property>
+            <style>
+              <class name="notification"/>
+              <class name="custom-button-2"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+
+
+
+    <child>
+      <object class="GtkBox" id="view-port">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkPopoverMenu" id="popover">
+            <property name="halign">center</property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwTabBar" id="tab-bar">
+            <property name="view">tab-view</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwTabView" id="tab-view">
+            <property name="vexpand">True</property>
+            <property name="menu-model">tab_menu</property>
+            <signal name="create-window" handler="create_window_cb" swapped="true"/>
+            <signal name="setup-menu" handler="setup_menu_cb" swapped="true"/>
+          </object>
+        </child>
+      </object>
+    </child>
+
+
+    <menu id="sort_menu">
+      <section>
+        <item>
+          <attribute name="label">by Name</attribute>
+          <attribute name="action">sort-by-name</attribute>
+        </item>
+        <item>
+          <attribute name="label">by Last Modified</attribute>
+          <attribute name="action">sort-by-modified</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label">include Hidden</attribute>
+          <attribute name="action">show-hidden</attribute>
+        </item>
+      </section>
+    </menu>
+
+    <menu id="tab_menu">
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">_Move to New Window</attribute>
+          <attribute name="action">move-to-new-window</attribute>
+        </item>
+        <item>
+          <attribute name="label" translatable="yes">D_uplicate</attribute>
+          <attribute name="action">duplicate</attribute>
+        </item>
+      </section>
+    </menu>
+
+    <menu id="appmenu">
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">About</attribute>
+          <attribute name="action">app.about</attribute>
+        </item>
+      </section>
+      <section>
+        <item>
+          <attribute name="label" translatable="yes">Quit</attribute>
+          <attribute name="action">app.quit</attribute>
+          <attribute name="accel">&lt;Primary&gt;q</attribute>
+        </item>
+      </section>
+    </menu>
+  </template>
+</interface>

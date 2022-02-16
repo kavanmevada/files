@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Files
+Comment=Access and organize files
+Keywords=gtk;files;
+Exec=files
+Icon=org.kavanmevada.Files
+Terminal=false
+Type=Application
+#DBusActivatable=true
+StartupNotify=true
+Categories=GTK;Utility;Core;FileManager;

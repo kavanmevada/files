@@ -1,0 +1,42 @@
+[package]
+name = "files"
+version = "0.0.1"
+edition = "2021"
+
+description = "Access and organize files"
+homepage = "https://example.com/"
+repository = "https://example.com/repo"
+license = "MIT OR Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+adw = { version = "0.1.0", package = "libadwaita" }
+gtk = { version = "0.4.6", package = "gtk4" }
+gdk = { version = "0.4.6", package = "gdk4" }
+glib = { version = "0.15.4" }
+gio = { version = "0.15.4" }
+once_cell = "1.9.0"
+
+[package.metadata.deb]
+maintainer = "Kavan Mevada <kavanmevada@gmail.com>"
+copyright = "2021, 2021 <kavanmevada@gmail.com>"
+
+assets = [
+    ["target/release/files", "/usr/bin/files", "755"],
+    ["org.kavanmevada.Files.svg", "/usr/share/icons/hicolor/scalable/apps/org.kavanmevada.Files.svg", "644"],
+    ["org.kavanmevada.Files.svg", "/usr/share/icons/hicolor/scalable/apps/org.kavanmevada.Files.svg", "644"],
+    ["org.kavanmevada.Files.desktop", "/usr/share/applications/org.kavanmevada.Files.desktop", "644"],
+    ["org.kavanmevada.Files.metainfo.xml", "/usr/share/metainfo/org.kavanmevada.Files.metainfo.xml", "644"],
+]
+
+depends = "$auto, libgtk-4-dev (>= 4.6.0), libadwaita-1-dev"
+
+[package.metadata.rpm]
+package = "files"
+
+[package.metadata.rpm.cargo]
+buildflags = ["--release"]
+
+[package.metadata.rpm.targets]
+files = { path = "/usr/bin/files" }

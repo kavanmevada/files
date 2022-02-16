@@ -1,0 +1,143 @@
+on: [push]
+
+name: Create Build/Release
+
+jobs:
+  build:
+    name: Build/Release
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/debian:experimental
+      options: --privileged
+
+    steps:
+      - name: Install Build Essential
+        run: apt-get -qq update && apt-get -qq install gcc libgtk-4-dev libadwaita-1-dev rpm wget git pkg-config flatpak flatpak-builder jq -y
+
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+
+      - name: Set variables
+        id: vars
+        run: |
+          NAME=$(cargo metadata -q --no-deps | jq -r '.packages[0].name')
+          VERSION=$(cargo metadata -q --no-deps | jq -r '.packages[0].version')
+
+          DORELEASE=true
+          for TAG in $(git ls-remote --tags origin | sed -E 's/^[[:xdigit:]]+[[:space:]]+refs\/tags\/(.+)/\1/g'); do
+              if [ "$TAG" = "$VERSION" ]; then DORELEASE=false; fi
+          done
+
+
+          echo ::set-output name=name::$NAME
+          echo ::set-output name=version::$VERSION
+          echo ::set-output name=secretspresent::$DORELEASE
+
+      - name: Vendoring Project
+        run: |
+          cargo vendor && cargo fetch && mkdir .cargo
+          echo '[source.crates-io]' >> .cargo/config.toml
+          echo 'replace-with = "vendored-sources"' >> .cargo/config.toml
+          echo '[source.vendored-sources]' >> .cargo/config.toml
+          echo 'directory = "vendor"' >> .cargo/config.toml
+          
+      - name: Build
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        run: cargo --offline build --bin files --release
+
+
+      - name: Create Release
+        id: create_release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.vars.outputs.version }}
+          release_name: ${{ steps.vars.outputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Flatpak Build
+        id: create_flatpak_release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        run: |
+          flatpak remote-add --if-not-exists gnome-nightly https://nightly.gnome.org/gnome-nightly.flatpakrepo
+          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install org.gnome.Platform//master org.gnome.Sdk//master -y
+          flatpak install org.freedesktop.Sdk.Extension.rust-nightly//21.08 -y
+          flatpak-builder --repo=myrepo _flatpak org.kavanmevada.Files.yml
+          flatpak build-bundle myrepo org.kavanmevada.Files.amd64.flatpak org.kavanmevada.Files
+
+
+      - name: Upload Flatpak Release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: org.kavanmevada.Files.amd64.flatpak
+          asset_name: org.kavanmevada.Files.amd64.flatpak
+          asset_content_type: application/vnd.flatpak
+
+
+      - uses: actions-rs/install@v0.1
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        with:
+          crate: cargo-deb
+          version: latest
+
+      - name: Debian Build
+        id: create_deb_release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        run: cargo deb
+
+
+      - name: Upload Debian Release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: target/debian/files_${{ steps.vars.outputs.version }}_amd64.deb
+          asset_name: ${{ steps.vars.outputs.name }}.${{ steps.vars.outputs.version }}.amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+
+
+
+
+      - uses: actions-rs/install@v0.1
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        with:
+          crate: cargo-rpm
+          version: latest
+
+      - name: Fedora Build
+        id: create_rpm_release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        run: cargo rpm build -v
+
+      - name: Upload RPM Release
+        if: ${{ steps.vars.outputs.secretspresent == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: target/release/rpmbuild/RPMS/x86_64/${{ steps.vars.outputs.name }}-${{ steps.vars.outputs.version }}-1.x86_64.rpm
+          asset_name: ${{ steps.vars.outputs.name }}.${{ steps.vars.outputs.version }}.amd64.rpm
+          asset_content_type: application/x-rpm
