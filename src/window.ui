@@ -12,23 +12,31 @@
       </lookup>
     </binding>
 
-    <binding name="selected-view-path">
-      <lookup name="path" type="BrowserView">
-          <lookup name="selected-view">Window</lookup>
-      </lookup>
-    </binding>
-
     <binding name="selection-model">
       <lookup name="model" type="BrowserView">
           <lookup name="selected-view">Window</lookup>
       </lookup>
     </binding>
 
-
-
     <child type="titlebar">
       <object class="GtkHeaderBar" id="headerbar">
         <property name="show-title-buttons">True</property>
+
+        <child type="start">
+          <object class="GtkButton">
+            <property name="icon-name">go-previous-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Back</property>
+            <signal name="clicked" handler="go_backward" swapped="true"/>
+          </object>
+        </child>
+        <child type="start">
+          <object class="GtkButton">
+            <property name="icon-name">go-next-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Forward</property>
+            <signal name="clicked" handler="go_forward" swapped="true"/>
+          </object>
+        </child>
+
 
         <child type="title">
           <object class="GtkSearchEntry" id="entry_a">

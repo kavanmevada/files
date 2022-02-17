@@ -92,7 +92,6 @@ mod imp {
     use gtk::subclass::prelude::*;
     use gtk::{self, gio, glib};
 
-    use crate::browser_view::BrowserView;
     use crate::window::Window;
 
     #[derive(Debug, Default)]
@@ -168,12 +167,9 @@ mod imp {
     impl ApplicationImpl for Application {
         fn activate(&self, application: &Self::Type) {
             let window = Window::new(Some(application));
-            window.add_page(&BrowserView::for_path("/bin"), "/bin");
-            window.add_page(&BrowserView::for_path("/lib64"), "/lib64");
-            window.add_page(
-                &BrowserView::for_path(glib::home_dir()),
-                glib::home_dir().as_path().to_str().unwrap(),
-            );
+            window.create_tab("/bin");
+            window.create_tab("/lib64");
+            window.create_tab(glib::home_dir());
             window.add_css_class("devel");
             window.present();
         }

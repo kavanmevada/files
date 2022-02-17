@@ -1,6 +1,4 @@
 use gtk::{self, glib};
-// use gtk::prelude::*;
-// use gtk::subclass::prelude::*;
 
 glib::wrapper! {
     pub struct ProcessPopover(ObjectSubclass<imp::ProcessPopover>) @extends gtk::Widget, gtk::Popover, @implements gtk::Buildable;

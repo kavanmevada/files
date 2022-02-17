@@ -27,7 +27,6 @@
       </object>
     </property>
 
-
     <child>
       <object class="GtkStack" id="viewport">
         <property name="hexpand">1</property>
@@ -52,7 +51,7 @@
                             <property name="model">model</property>
                             <property name="max-columns">15</property>
                             <property name="vexpand">1</property>
-                            <signal name="activate" handler="filebrowser_activate" swapped="true"/>
+                            <signal name="activate" handler="filebrowser_activate" object="BrowserView" swapped="true"/>
                             <property name="factory">
                               <object class="GtkBuilderListItemFactory">
                                 <property name="bytes"><![CDATA[

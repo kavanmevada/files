@@ -1,7 +1,7 @@
 use crate::utilities::Utilities;
 use glib::subclass::prelude::*;
-use glib::*;
-use gtk::{self, gio, glib};
+
+use gtk::{self, gio, glib, prelude::*};
 
 glib::wrapper! {
     pub struct BrowserView(ObjectSubclass<imp::BrowserView>) @extends gtk::Widget, @implements gtk::Buildable;
@@ -9,7 +9,7 @@ glib::wrapper! {
 
 impl BrowserView {
     pub fn for_path<P: AsRef<std::path::Path>>(path: P) -> Self {
-        glib::Object::new(&[("path", &gio::File::for_path(path))]).expect("Failed to create Window")
+        glib::Object::new(&[("dir", &gio::File::for_path(path))]).expect("Failed to create Window")
     }
 
     pub fn search(&self, query: String) {
@@ -25,7 +25,7 @@ impl BrowserView {
     }
 
     pub fn attach_search_view(&self) {
-        self.property::<gio::File>("path").iter(&self.imp().sstore);
+        self.property::<gio::File>("dir").iter(&self.imp().sstore);
         self.imp().sort_model.set_model(Some(&self.imp().sstore));
     }
 
@@ -35,11 +35,40 @@ impl BrowserView {
             .sort_model
             .set_model(Some(&self.imp().list.get()));
     }
+
+
+
+    // Navigation Methods
+    pub fn go_backward(&self) {
+        let (store, pos) = &mut *self.imp().history.borrow_mut();
+        if *pos > 0 {
+            *pos = pos.saturating_sub(1);
+            if let Some(item) = store.item(*pos)
+                .and_then(|c| c.downcast::<gio::File>().ok()) {
+                self.imp().list.get().set_file(Some(&item));
+            }
+        }
+    }
+
+    pub fn go_forward(&self) {
+        let (store, pos) = &mut *self.imp().history.borrow_mut();
+        if pos.saturating_add(1) < store.n_items() {
+            *pos = pos.saturating_add(1);
+            if let Some(item) = store.item(*pos)
+                .and_then(|c| c.downcast::<gio::File>().ok()) {
+                self.imp().list.get().set_file(Some(&item));
+            }
+        }
+    }
+
 }
 
 mod imp {
     use glib::clone;
+    use gtk::glib::subclass::Signal;
+    use once_cell::sync::Lazy;
     use std::cell::RefCell;
+    use std::rc::Rc;
 
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
@@ -71,6 +100,8 @@ mod imp {
         pub search_model: gtk::FilterListModel,
 
         pub sstore: gio::ListStore,
+
+        pub history: Rc<RefCell<(gio::ListStore, u32)>>,
     }
 
     #[gtk::template_callbacks]
@@ -86,8 +117,8 @@ mod imp {
             );
         }
 
-        #[template_callback(function = false)]
-        fn filebrowser_activate(&self, pos: u32, grid: &gtk::GridView) {
+        #[template_callback]
+        fn filebrowser_activate(view: &super::BrowserView, pos: u32, grid: &gtk::GridView) {
             let single = grid
                 .model()
                 .and_then(|g| g.item(pos))
@@ -101,7 +132,7 @@ mod imp {
                     .and_then(|f| f.downcast::<gio::File>().ok()),
             ) {
                 if file_type == gio::FileType::Directory {
-                    self.list.set_file(Some(&file));
+                    view.set_property("dir", file);
                 } else if let Some(info) = gio::AppInfo::default_for_type(mime_type.as_str(), true)
                 {
                     info.launch(&[file], None::<&gdk::AppLaunchContext>)
@@ -201,17 +232,27 @@ mod imp {
                 view_type: Default::default(),
                 search_model: Default::default(),
                 sstore: gio::ListStore::new(gio::FileInfo::static_type()),
+
+                history: Rc::new(RefCell::new((
+                    gio::ListStore::new(gio::File::static_type()),
+                    0u32,
+                ))),
             }
         }
     }
 
     impl ObjectImpl for BrowserView {
-        fn constructed(&self, obj: &Self::Type) {
-            self.parent_constructed(obj);
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
+                vec![
+                    Signal::builder("go-backward", &[], <()>::static_type().into()).build(),
+                    Signal::builder("go-forward", &[], <()>::static_type().into()).build()
+                ]
+            });
+            SIGNALS.as_ref()
         }
 
         fn properties() -> &'static [glib::ParamSpec] {
-            use once_cell::sync::Lazy;
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
                 vec![
                     glib::ParamSpecObject::new(
@@ -222,9 +263,9 @@ mod imp {
                         glib::ParamFlags::READWRITE,
                     ),
                     glib::ParamSpecObject::new(
-                        "path",
-                        "path",
-                        "path",
+                        "dir",
+                        "dir",
+                        "dir",
                         gio::File::static_type(),
                         glib::ParamFlags::READWRITE,
                     ),
@@ -248,10 +289,13 @@ mod imp {
             pspec: &glib::ParamSpec,
         ) {
             match pspec.name() {
-                "path" => {
-                    if let Ok(value) = value.get::<gio::File>() {
-                        self.list.set_file(Some(&value));
-                    }
+                "dir" => if let Ok(value) = value.get::<gio::File>() {
+                    self.list.set_file(Some(&value));
+
+                    let (store, pos) = &mut *self.history.borrow_mut();
+                    *pos = pos.saturating_add(1);
+                    for _ in *pos..store.n_items() { store.remove(*pos) }
+                    store.append(&value);
                 }
                 _ => unimplemented!(),
             }
@@ -260,7 +304,7 @@ mod imp {
         fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
             match pspec.name() {
                 "stack" => self.stack.get().to_value(),
-                "path" => self.list.file().unwrap().to_value(),
+                "dir" => self.list.file().to_value(),
                 "model" => self.model.to_value(),
                 _ => unimplemented!(),
             }

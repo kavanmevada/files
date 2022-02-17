@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -5,6 +6,7 @@ use gtk::subclass::prelude::*;
 use gtk::{self, gdk, gio, glib};
 
 use crate::application::ProcessType;
+use crate::browser_view::BrowserView;
 use crate::window;
 
 glib::wrapper! {
@@ -83,7 +85,7 @@ async fn dialog(window: Rc<window::Window>) {
 
     if answer == gtk::ResponseType::Ok {
         let cancellable = gio::Cancellable::new();
-        let dir = window.property::<gio::File>("selected-view-path");
+        let dir: gio::File = window.property::<BrowserView>("selected-view").property("path");
         dir.child(entry.text().as_str())
             .make_directory(Some(&cancellable))
             .expect("Error making directory");
@@ -91,9 +93,12 @@ async fn dialog(window: Rc<window::Window>) {
 }
 
 impl Window {
-    pub fn add_page<W: IsA<gtk::Widget>>(&self, page: &W, title: &str) {
-        let page = self.imp().tabview.add_page(page, None);
-        page.set_title(title);
+    pub fn create_tab<P: AsRef<Path>>(&self, path: P) {
+        let child = BrowserView::for_path(path.as_ref());
+        let page = self.imp().tabview.add_page(&child, None);
+        if let Some(title) = path.as_ref().to_str() {
+            page.set_title(title);
+        }
     }
 
     pub fn new<P: glib::IsA<gtk::Application> + ToValue>(app: Option<&P>) -> Self {
@@ -116,6 +121,7 @@ mod imp {
     use crate::stack_button::AdwStackButton;
 
     use glib::clone;
+    
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
     use gtk::CompositeTemplate;
@@ -174,7 +180,7 @@ mod imp {
                         .attribute_object("standard::file")
                         .and_then(|o| o.downcast::<gio::File>().ok());
                     win.property::<BrowserView>("selected-view")
-                        .set_property("path", selection_file.as_ref());
+                        .set_property("dir", selection_file.as_ref());
                 }
             });
 
@@ -204,7 +210,7 @@ mod imp {
                         if selection.file_type() == gio::FileType::Directory {
                             let nwindow = super::Window::new(win.application().as_ref());
                             nwindow
-                                .add_page(&BrowserView::for_path(&path), &path.to_str().unwrap());
+                                .create_tab(&path);
                             nwindow.present();
                         }
                     }
@@ -219,7 +225,7 @@ mod imp {
                         .and_then(|f| f.path())
                     {
                         if selection.file_type() == gio::FileType::Directory {
-                            win.add_page(&BrowserView::for_path(&path), &path.to_str().unwrap());
+                            win.create_tab(&path);
                         }
                     }
                 }
@@ -288,7 +294,7 @@ mod imp {
                     } else {
                         None
                     }
-                    .or(Some(win.property::<gio::File>("selected-view-path")))
+                    .or(win.property::<BrowserView>("selected-view").property("dir"))
                 {
                     gio::AppInfo::create_from_commandline(
                         "gnome-terminal --working-directory",
@@ -350,6 +356,16 @@ mod imp {
     #[gtk::template_callbacks]
     impl Window {
         #[template_callback(function = false)]
+        fn go_forward(&self) {
+            self.selected_view.borrow().as_ref().map(|v| v.go_forward());
+        }
+
+        #[template_callback(function = false)]
+        fn go_backward(&self) {
+            self.selected_view.borrow().as_ref().map(|v| v.go_backward());
+        }
+
+        #[template_callback(function = false)]
         fn search_started(&self, _entry: &gtk::SearchEntry) {
             if let Some(view) = self.selected_view.borrow().as_ref() {
                 view.attach_search_view();
@@ -358,9 +374,9 @@ mod imp {
 
         #[template_callback(function = false)]
         fn search_stopped(&self) {
-            // if let Some(view) = self.selected_view.borrow().as_ref() {
-            //     view.detach_search_view();
-            // }
+            if let Some(view) = self.selected_view.borrow().as_ref() {
+                view.detach_search_view();
+            }
         }
 
         #[template_callback(function = false)]
@@ -533,13 +549,6 @@ mod imp {
                         BrowserView::static_type(),
                         glib::ParamFlags::READWRITE,
                     ),
-                    glib::ParamSpecObject::new(
-                        "selected-view-path",
-                        "selected-view-path",
-                        "selected-view-path",
-                        gio::File::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    ),
                 ]
             });
             PROPERTIES.as_ref()
@@ -577,11 +586,6 @@ mod imp {
                         self.selected_view.replace(Some(view));
                     }
                 }
-                "selected-view-path" => {
-                    if let Ok(path) = value.get() {
-                        self.path.replace(Some(path));
-                    }
-                }
                 _ => unimplemented!(),
             }
         }
@@ -591,7 +595,6 @@ mod imp {
                 "application" => self.application.borrow().to_value(),
                 "selection-model" => self.selection_model.borrow().to_value(),
                 "selected-view" => self.selected_view.borrow().to_value(),
-                "selected-view-path" => self.path.borrow().to_value(),
                 _ => unimplemented!(),
             }
         }
