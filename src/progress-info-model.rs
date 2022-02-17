@@ -1,4 +1,4 @@
-use gtk::glib;
+use gtk::{self, glib};
 
 glib::wrapper! {
     pub struct ProgressInfoModel(ObjectSubclass<imp::ProgressInfoModel>);
@@ -6,8 +6,8 @@ glib::wrapper! {
 
 mod imp {
     use glib::*;
-    use gtk::glib;
     use gtk::subclass::prelude::*;
+    use gtk::{self, gio, glib};
     use std::cell::RefCell;
 
     #[derive(Debug)]

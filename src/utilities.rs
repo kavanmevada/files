@@ -1,3 +1,5 @@
+use gtk::{self, gio, glib};
+
 use gio::prelude::FileEnumeratorExt;
 use gio::prelude::FileExt;
 use gio::prelude::FileExtManual;

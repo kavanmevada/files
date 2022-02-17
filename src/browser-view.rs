@@ -1,8 +1,7 @@
 use crate::utilities::Utilities;
-use glib::*;
 use glib::subclass::prelude::*;
-use gtk::glib;
-use gtk::*;
+use glib::*;
+use gtk::{self, gio, glib};
 
 glib::wrapper! {
     pub struct BrowserView(ObjectSubclass<imp::BrowserView>) @extends gtk::Widget, @implements gtk::Buildable;
@@ -14,13 +13,15 @@ impl BrowserView {
     }
 
     pub fn search(&self, query: String) {
-        self.imp().filter_model.set_filter(Some(&gtk::CustomFilter::new(move |obj| {
-            let info = obj
-                .downcast_ref::<gio::FileInfo>()
-                .expect("The object needs to be of type `IntegerObject`.");
+        self.imp()
+            .filter_model
+            .set_filter(Some(&gtk::CustomFilter::new(move |obj| {
+                let info = obj
+                    .downcast_ref::<gio::FileInfo>()
+                    .expect("The object needs to be of type `IntegerObject`.");
 
-            info.name().display().to_string().contains(&query)
-        })));
+                info.name().display().to_string().contains(&query)
+            })));
     }
 
     pub fn attach_search_view(&self) {
@@ -30,7 +31,9 @@ impl BrowserView {
 
     pub fn detach_search_view(&self) {
         self.imp().sstore.remove_all();
-        self.imp().sort_model.set_model(Some(&self.imp().list.get()));
+        self.imp()
+            .sort_model
+            .set_model(Some(&self.imp().list.get()));
     }
 }
 
@@ -40,6 +43,7 @@ mod imp {
 
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+    use gtk::{self, gdk, gio};
     use gtk::{glib, CompositeTemplate};
 
     #[derive(Debug, CompositeTemplate)]
@@ -98,11 +102,10 @@ mod imp {
             ) {
                 if file_type == gio::FileType::Directory {
                     self.list.set_file(Some(&file));
-                } else {
-                    gio::AppInfo::default_for_type(mime_type.as_str(), true).map(|info| {
-                        info.launch(&[file], None::<&gdk::AppLaunchContext>)
-                            .expect("Error launching app");
-                    });
+                } else if let Some(info) = gio::AppInfo::default_for_type(mime_type.as_str(), true)
+                {
+                    info.launch(&[file], None::<&gdk::AppLaunchContext>)
+                        .expect("Error launching app");
                 }
             }
         }
@@ -155,8 +158,12 @@ mod imp {
                 child.map(|c| c.set_opacity(1.0));
             }));
 
-            item.child().map(|c| c.add_controller(&drag));
-            item.child().map(|c| c.add_controller(&gesture));
+            if let Some(c) = item.child() {
+                c.add_controller(&drag)
+            }
+            if let Some(c) = item.child() {
+                c.add_controller(&gesture)
+            }
 
             item.item()
                 .and_then(|item| item.downcast::<gio::FileInfo>().ok())

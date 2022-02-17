@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gio, glib};
+use gtk::{self, gdk, gio, glib};
 
 use crate::application::ProcessType;
 use crate::window;
@@ -118,7 +118,8 @@ mod imp {
     use glib::clone;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{glib, CompositeTemplate};
+    use gtk::CompositeTemplate;
+    use gtk::{self, gdk, gio, glib};
     use std::cell::RefCell;
 
     use std::rc::Rc;
@@ -263,10 +264,11 @@ mod imp {
                             .attribute_object("standard::file")
                             .and_then(|f| f.downcast::<gio::File>().ok()),
                     ) {
-                        gio::AppInfo::default_for_type(mime_type.as_str(), true).map(|info| {
+                        if let Some(info) = gio::AppInfo::default_for_type(mime_type.as_str(), true)
+                        {
                             info.launch(&[file], None::<&gdk::AppLaunchContext>)
                                 .expect("Error launching in default app!");
-                        });
+                        }
                     }
                 }
             });
@@ -370,7 +372,6 @@ mod imp {
             }
         }
 
-
         #[template_callback(function = false)]
         fn switch_view_cb(&self, _view: &adw::TabView) -> adw::TabView {
             let window = super::Window::new(self.application.borrow().as_ref());
@@ -472,9 +473,10 @@ mod imp {
                     section1.append(Some("Open in New Window"), Some("open-in-new-window"));
                     section1.append(Some("Open in Terminal"), Some("open-in-terminal"));
                 } else {
-                    single.as_ref().and_then(|f| f.content_type())
-                        .and_then(|mime| gio::AppInfo::default_for_type(mime.as_str(), true))
-                        .map(|info| section0.append(Some(&format!("Open with {}", info.name().as_str())), Some("open-in-default")));
+
+                    if let Some(info) = single.as_ref().and_then(|f| f.content_type())
+                        .and_then(|mime| gio::AppInfo::default_for_type(mime.as_str(), true)) { section0.append(Some(&format!("Open with {}", info.name().as_str())), Some("open-in-default")) }
+
 
                     section3.append(Some("New Folder"), Some("new-folder"));
                     section1.append(Some("Open Terminal Here"), Some("open-in-terminal"));

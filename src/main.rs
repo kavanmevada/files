@@ -3,8 +3,8 @@
 extern crate adw;
 extern crate gtk;
 
-mod utilities;
 mod application;
+mod utilities;
 mod window;
 
 #[path = "browser-view.rs"]

@@ -1,3 +1,5 @@
+use gtk::{self, glib};
+
 glib::wrapper! {
     pub struct ProcessItemView(ObjectSubclass<imp::ProcessItemView>) @extends gtk::Widget;
 }
@@ -17,7 +19,8 @@ impl ProcessItemView {
 mod imp {
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
-    use gtk::{glib, CompositeTemplate};
+    use gtk::CompositeTemplate;
+    use gtk::{self, glib};
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(file = "process-item-view.ui")]

@@ -1,3 +1,5 @@
+use gtk::{self, glib};
+
 glib::wrapper! {
     pub struct AdwStackButton(ObjectSubclass<imp::AdwStackButton>) @extends gtk::Widget, @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Actionable;
 }
@@ -15,11 +17,11 @@ impl AdwStackButton {
 }
 
 mod imp {
+    use gtk::{self, gio, glib};
     use std::cell::RefCell;
     use std::rc::Rc;
 
-    use glib::clone;
-    use gtk::glib;
+    use super::glib::clone;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
 
@@ -58,9 +60,9 @@ mod imp {
 
     impl ObjectImpl for AdwStackButton {
         fn constructed(&self, obj: &Self::Type) {
-            self.menu_btn
-                .first_child()
-                .map(|child| child.remove_css_class("image-button"));
+            if let Some(child) = self.menu_btn.first_child() {
+                child.remove_css_class("image-button")
+            }
 
             self.button.connect_clicked(clone!(@strong self.stack as stack, @strong self.pos as pos => move |_btn| {
                 pos.replace_with(|&mut pos| if stack.borrow().as_ref().map(|s| pos+1 >= s.n_items()).unwrap_or(false) { 0 } else { pos + 1 });

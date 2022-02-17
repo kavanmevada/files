@@ -1,6 +1,6 @@
 use glib::{clone, subclass::prelude::*};
 use gtk::prelude::*;
-use gtk::{gio, glib};
+use gtk::{self, gio, glib};
 
 use crate::progress_info_model::ProgressInfoModel;
 
@@ -88,9 +88,9 @@ impl Application {
 
 mod imp {
     use glib::clone;
-    use gtk::glib;
     use gtk::prelude::*;
     use gtk::subclass::prelude::*;
+    use gtk::{self, gio, glib};
 
     use crate::browser_view::BrowserView;
     use crate::window::Window;
