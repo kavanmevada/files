@@ -1,7 +1,7 @@
 use crate::utilities::Utilities;
 use glib::subclass::prelude::*;
 
-use gtk::{self, gio, glib, prelude::*};
+use gtk::{self, gio, glib::{self, clone}, prelude::*};
 
 glib::wrapper! {
     pub struct BrowserView(ObjectSubclass<imp::BrowserView>) @extends gtk::Widget, @implements gtk::Buildable;
@@ -12,21 +12,20 @@ impl BrowserView {
         glib::Object::new(&[("dir", &gio::File::for_path(path))]).expect("Failed to create Window")
     }
 
-    pub fn search(&self, query: String) {
-        self.imp()
-            .filter_model
-            .set_filter(Some(&gtk::CustomFilter::new(move |obj| {
-                let info = obj
-                    .downcast_ref::<gio::FileInfo>()
-                    .expect("The object needs to be of type `IntegerObject`.");
+    pub fn search(&self, _query: String) {
+        // self.imp().sfilter.set_filter(Some(&gtk::CustomFilter::new(clone!(@strong self as s => move |obj| {
+        //     let info = obj
+        //         .downcast_ref::<gio::FileInfo>()
+        //         .expect("The object needs to be of type `IntegerObject`.");
+        //     let str = info.name().display().to_string();
 
-                info.name().display().to_string().contains(&query)
-            })));
+        //     str.contains(&query)
+        // }))));
     }
 
-    pub fn attach_search_view(&self) {
-        self.property::<gio::File>("dir").iter(&self.imp().sstore);
+    pub fn attach_search_view(&self, _entry: &gtk::SearchEntry) {
         self.imp().sort_model.set_model(Some(&self.imp().sstore));
+        //self.property::<gio::File>("dir").iter(&self.imp().sstore);
     }
 
     pub fn detach_search_view(&self) {
@@ -61,6 +60,14 @@ impl BrowserView {
         }
     }
 
+    pub fn set_active(&self, state: bool) {
+        self.imp().include_hidden.replace(state);
+    }
+
+    pub fn active(&self) -> bool {
+        *self.imp().include_hidden.borrow()
+    }
+
 }
 
 mod imp {
@@ -68,6 +75,8 @@ mod imp {
     use gtk::glib::subclass::Signal;
     use once_cell::sync::Lazy;
     use std::cell::RefCell;
+    
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     use gtk::prelude::*;
@@ -93,15 +102,24 @@ mod imp {
         pub model: TemplateChild<gtk::MultiSelection>,
         #[template_child(id = "sort-model")]
         pub sort_model: TemplateChild<gtk::SortListModel>,
-        #[template_child(id = "filter-model")]
-        pub filter_model: TemplateChild<gtk::FilterListModel>,
+        // #[template_child(id = "filter-model")]
+        // pub filter_model: TemplateChild<gtk::FilterListModel>,
 
         pub view_type: RefCell<Option<String>>,
         pub search_model: gtk::FilterListModel,
 
         pub sstore: gio::ListStore,
+        pub sfilter: gtk::FilterListModel,
+        // pub filterMap: HashMap<String, gtk::CustomFilter>,
 
         pub history: Rc<RefCell<(gio::ListStore, u32)>>,
+
+        pub include_hidden: Rc<RefCell<bool>>,
+
+        #[template_child]
+        pub filters: TemplateChild<gtk::EveryFilter>,
+
+        pub hidden_filter: gtk::CustomFilter,
     }
 
     #[gtk::template_callbacks]
@@ -220,7 +238,19 @@ mod imp {
             obj.init_template();
         }
 
-        fn new() -> Self {
+        fn new() -> Self {   
+            let hidden_filter = gtk::CustomFilter::new(|obj| {
+                let info = obj
+                    .downcast_ref::<gio::FileInfo>()
+                    .expect("The object needs to be of type `IntegerObject`.");
+                let str = info.name().display().to_string();
+
+                !str.starts_with(".")
+            });
+
+            let sstore = gio::ListStore::new(gio::FileInfo::static_type());
+            let sfilter = gtk::FilterListModel::new(Some(&sstore), None::<&gtk::Filter>);
+
             Self {
                 view: Default::default(),
                 stack: Default::default(),
@@ -228,20 +258,32 @@ mod imp {
                 list: Default::default(),
                 model: Default::default(),
                 sort_model: Default::default(),
-                filter_model: Default::default(),
+                // filter_model: Default::default(),
                 view_type: Default::default(),
                 search_model: Default::default(),
-                sstore: gio::ListStore::new(gio::FileInfo::static_type()),
+
+                sstore,
+                sfilter,
 
                 history: Rc::new(RefCell::new((
                     gio::ListStore::new(gio::File::static_type()),
                     0u32,
                 ))),
+
+                include_hidden: Rc::new(RefCell::new(false)),
+
+                filters: Default::default(),
+                hidden_filter,
             }
         }
     }
 
     impl ObjectImpl for BrowserView {
+        fn constructed(&self, obj: &Self::Type) {
+            self.filters.append(&self.hidden_filter);
+            self.parent_constructed(obj);
+        }
+
         fn signals() -> &'static [Signal] {
             static SIGNALS: Lazy<Vec<Signal>> = Lazy::new(|| {
                 vec![
@@ -254,29 +296,34 @@ mod imp {
 
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![
-                    glib::ParamSpecObject::new(
-                        "stack",
-                        "stack",
-                        "stack",
-                        gtk::Stack::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    ),
-                    glib::ParamSpecObject::new(
-                        "dir",
-                        "dir",
-                        "dir",
-                        gio::File::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    ),
-                    glib::ParamSpecObject::new(
-                        "model",
-                        "model",
-                        "model",
-                        gio::File::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    ),
-                ]
+                vec![glib::ParamSpecObject::new(
+                    "stack",
+                    "stack",
+                    "stack",
+                    gtk::Stack::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecObject::new(
+                    "dir",
+                    "dir",
+                    "dir",
+                    gio::File::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecObject::new(
+                    "model",
+                    "model",
+                    "model",
+                    gio::File::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecBoolean::new(
+                    "show-hidden",
+                    "show-hidden",
+                    "show-hidden",
+                    false,
+                    glib::ParamFlags::READWRITE,
+                ),]
             });
             PROPERTIES.as_ref()
         }
@@ -289,12 +336,28 @@ mod imp {
             pspec: &glib::ParamSpec,
         ) {
             match pspec.name() {
+                "show-hidden" => if let Ok(val) = value.get::<bool>() {
+                    if !val {
+                        self.filters.append(&self.hidden_filter);
+                    } else {
+                        // for pos in 0..self.filters.n_items() {
+                        //     if let Some(name) = self.filters.item(pos).and_then(|i| unsafe { i.data::<String>("name") }) {
+                        //         dbg!(unsafe { name.as_ref() });
+                        //         if unsafe { name.as_ref() } == "hidden-filter" {
+                        //             self.filters.remove(pos);
+                        //         }
+                        //     }
+                        // }
+                    }
+                    self.include_hidden.replace(val);
+                },
+
                 "dir" => if let Ok(value) = value.get::<gio::File>() {
                     self.list.set_file(Some(&value));
 
                     let (store, pos) = &mut *self.history.borrow_mut();
-                    *pos = pos.saturating_add(1);
-                    for _ in *pos..store.n_items() { store.remove(*pos) }
+                    for _ in (*pos).saturating_add(1)..store.n_items() { store.remove((*pos).saturating_add(1)) }
+                    *pos = store.n_items();
                     store.append(&value);
                 }
                 _ => unimplemented!(),
@@ -306,6 +369,7 @@ mod imp {
                 "stack" => self.stack.get().to_value(),
                 "dir" => self.list.file().to_value(),
                 "model" => self.model.to_value(),
+                "show-hidden" => self.include_hidden.borrow().to_value(),
                 _ => unimplemented!(),
             }
         }

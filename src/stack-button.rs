@@ -33,6 +33,8 @@ mod imp {
         pub button: gtk::Button,
 
         pub pos: Rc<RefCell<u32>>,
+
+        pub children: gio::ListStore,
     }
 
     #[glib::object_subclass]
@@ -54,6 +56,7 @@ mod imp {
                 popover: gtk::PopoverMenu::from_model(None::<&gio::MenuModel>),
                 button: gtk::Button::new(),
                 pos: Default::default(),
+                children: gio::ListStore::new(gtk::Widget::static_type()),
             }
         }
     }
@@ -75,6 +78,10 @@ mod imp {
                     if let Some(item) = model.item(next_pos) { _btn.set_icon_name(&item.property::<String>("icon-name")) }
                 }
             }));
+
+            let btn = gtk::CheckButton::new();
+            btn.set_label(Some("label"));
+            self.popover.add_child(&btn, "hidden");
 
             self.button.set_parent(obj);
             self.menu_btn.set_popover(Some(&self.popover));
@@ -140,9 +147,14 @@ mod imp {
                     self.stack
                         .replace(value.get::<gtk::Stack>().ok().map(|val| val.pages()));
                 }
-                "menu-model" => self
-                    .popover
-                    .set_menu_model(value.get::<gio::MenuModel>().ok().as_ref()),
+                "menu-model" => if let Ok(val) = value.get::<gio::MenuModel>() {
+                    self.popover.set_menu_model(Some(&val));
+                    for child in self.children.snapshot().iter().map(|c| c.downcast_ref::<gtk::Widget>()) {
+                        if let (Some(child), Some(id)) = (child, unsafe { child.and_then(|c| c.data::<String>("name")) }) {
+                            self.popover.add_child(child, unsafe { id.as_ref() });
+                        }
+                    }
+                },
                 _ => unimplemented!(),
             }
         }
@@ -161,7 +173,21 @@ mod imp {
         }
     }
 
-    impl BuildableImpl for AdwStackButton {}
+    impl BuildableImpl for AdwStackButton {
+        fn add_child(
+            &self,
+            _buildable: &Self::Type,
+            _builder: &gtk::Builder,
+            child: &glib::Object,
+            type_: Option<&str>,
+        ) {
+            if let (Some(type_), Some(widget)) = (type_, child.downcast_ref::<gtk::Widget>()) {
+                unsafe { widget.set_data("name", type_.to_owned()); }
+                self.children.append(widget);
+            }
+        }
+    }
+
     impl WidgetImpl for AdwStackButton {
         fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(widget, width, height, baseline);

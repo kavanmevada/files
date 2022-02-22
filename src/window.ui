@@ -6,17 +6,13 @@
     <property name="title">Files</property>
 
 
-    <binding name="selected-view">
+    <binding name="selected-page-child">
       <lookup name="child" type="AdwTabPage">
-        <lookup name="selected-page">tab-view</lookup>
+          <lookup name="selected-page">tab-view</lookup>
       </lookup>
     </binding>
 
-    <binding name="selection-model">
-      <lookup name="model" type="BrowserView">
-          <lookup name="selected-view">Window</lookup>
-      </lookup>
-    </binding>
+
 
     <child type="titlebar">
       <object class="GtkHeaderBar" id="headerbar">
@@ -42,8 +38,8 @@
           <object class="GtkSearchEntry" id="entry_a">
             <property name="width-request">300</property>
             <signal name="search-changed" handler="search_entry_changed" swapped="true"/>
-            <signal name="search-started" handler="search_started" swapped="true"/>
-            <signal name="stop-search" handler="search_stopped" swapped="true"/>
+<!--             <signal name="search-started" handler="search_started" swapped="true"/> -->
+<!--             <signal name="stop-search" handler="search_stopped" swapped="true"/> -->
           </object>
         </child>
 
@@ -68,6 +64,19 @@
               </lookup>
             </binding>
             <property name="menu-model">sort_menu</property>
+
+            <child type="custom1">
+              <object class="GtkCheckButton" id="show-hidden-btn">
+                <property name="label">Show Hidden</property>
+                <binding name="active">
+                  <lookup name="show-hidden" type="BrowserView">
+                      <lookup name="selected-page-child">Window</lookup>
+                  </lookup>
+                </binding>
+                <signal name="toggled" handler="toggle_hiddent_state" swapped="true"/>
+              </object>
+            </child>
+
           </object>
         </child>
 
@@ -148,8 +157,8 @@
           <object class="AdwTabView" id="tab-view">
             <property name="vexpand">True</property>
             <property name="menu-model">tab_menu</property>
-            <signal name="create-window" handler="create_window_cb" swapped="true"/>
-            <signal name="setup-menu" handler="setup_menu_cb" swapped="true"/>
+            <signal name="create-window" handler="create_window_cb" object="Window" swapped="true"/>
+            <signal name="setup-menu" handler="setup_menu_cb" object="Window" swapped="true"/>
           </object>
         </child>
       </object>
@@ -169,8 +178,7 @@
       </section>
       <section>
         <item>
-          <attribute name="label">include Hidden</attribute>
-          <attribute name="action">show-hidden</attribute>
+          <attribute name="custom">custom1</attribute>
         </item>
       </section>
     </menu>

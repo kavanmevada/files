@@ -85,7 +85,7 @@ async fn dialog(window: Rc<window::Window>) {
 
     if answer == gtk::ResponseType::Ok {
         let cancellable = gio::Cancellable::new();
-        let dir: gio::File = window.property::<BrowserView>("selected-view").property("path");
+        let dir: gio::File = window.property::<BrowserView>("selected-page-child").property("path");
         dir.child(entry.text().as_str())
             .make_directory(Some(&cancellable))
             .expect("Error making directory");
@@ -162,6 +162,10 @@ mod imp {
         pub selection: Rc<RefCell<Selection>>,
 
         pub view_type: RefCell<Option<String>>,
+
+
+        #[template_child(id = "show-hidden-btn")]
+        pub show_hidden_btn: TemplateChild<gtk::CheckButton>,
     }
 
     #[glib::object_subclass]
@@ -179,7 +183,7 @@ mod imp {
                     let selection_file = selection
                         .attribute_object("standard::file")
                         .and_then(|o| o.downcast::<gio::File>().ok());
-                    win.property::<BrowserView>("selected-view")
+                    win.property::<BrowserView>("selected-page-child")
                         .set_property("dir", selection_file.as_ref());
                 }
             });
@@ -294,7 +298,7 @@ mod imp {
                     } else {
                         None
                     }
-                    .or(win.property::<BrowserView>("selected-view").property("dir"))
+                    .or(win.property::<BrowserView>("selected-page-child").property("dir"))
                 {
                     gio::AppInfo::create_from_commandline(
                         "gnome-terminal --working-directory",
@@ -309,7 +313,7 @@ mod imp {
             });
 
             klass.install_action("sort-by-name", None, |win, _name, _variant| {
-                let view = win.property::<BrowserView>("selected-view");
+                let view = win.property::<BrowserView>("selected-page-child");
                 view.imp()
                     .sort_model
                     .set_sorter(Some(&gtk::CustomSorter::new(move |obj1, obj2| {
@@ -340,10 +344,10 @@ mod imp {
                     })))
             });
 
-            klass.install_action("show-hidden", None, |win, _name, _variant| {
-                let view = win.property::<BrowserView>("selected-view");
-                view.imp().filter_model.set_filter(None::<&gtk::Filter>);
-            });
+            // klass.install_action("show-hidden", None, |win, _name, _variant| {
+            //     let _view = win.property::<BrowserView>("selected-view");
+            //     //view.imp().filter_model.set_filter(None::<&gtk::Filter>);
+            // });
         }
 
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -356,6 +360,11 @@ mod imp {
     #[gtk::template_callbacks]
     impl Window {
         #[template_callback(function = false)]
+        fn toggle_hiddent_state(&self, btn: gtk::CheckButton) {
+            self.selected_view.borrow().as_ref().map(|v| v.set_property("show-hidden", btn.is_active()));
+        }
+
+        #[template_callback(function = false)]
         fn go_forward(&self) {
             self.selected_view.borrow().as_ref().map(|v| v.go_forward());
         }
@@ -365,25 +374,26 @@ mod imp {
             self.selected_view.borrow().as_ref().map(|v| v.go_backward());
         }
 
-        #[template_callback(function = false)]
-        fn search_started(&self, _entry: &gtk::SearchEntry) {
-            if let Some(view) = self.selected_view.borrow().as_ref() {
-                view.attach_search_view();
-            }
-        }
+        // #[template_callback(function = false)]
+        // fn search_started(&self, entry: &gtk::SearchEntry) {
+        //     dbg!(self.selected_view.borrow().as_ref());
+        //     self.selected_view.borrow().as_ref().map(|v| v.attach_search_view(entry));
+        // }
 
-        #[template_callback(function = false)]
-        fn search_stopped(&self) {
-            if let Some(view) = self.selected_view.borrow().as_ref() {
-                view.detach_search_view();
-            }
-        }
+        // #[template_callback(function = false)]
+        // fn search_stopped(&self) {
+        //     dbg!(self.selected_view.borrow().as_ref());
+        //     self.selected_view.borrow().as_ref().map(|v| v.detach_search_view());
+        // }
 
         #[template_callback(function = false)]
         fn search_entry_changed(&self, entry: &gtk::SearchEntry) {
+            dbg!("ASDasdasdasd");
             if let Some(view) = self.selected_view.borrow().as_ref() {
                 if entry.text() != "" {
                     view.search(entry.text().to_string());
+                } else {
+                    view.detach_search_view();
                 }
             }
         }
@@ -452,7 +462,10 @@ mod imp {
 
             gesture.set_button(3);
             gesture.connect_released(clone!(@strong obj, @strong self.popover as popover, @strong self.selection as selection => move |gesture, _n_press, x, y| {
-                let application: Application = obj.property("application");
+                let application = obj.application().and_then(|app| app.downcast::<Application>().ok()).unwrap();
+
+
+
                 let selected_model: gio::ListStore = application.property("selected-items-store");
                 let selection_model = obj.property::<gtk::MultiSelection>("selection-model");
                 let filter_model = gtk::SelectionFilterModel::new(Some(&selection_model));
@@ -529,13 +542,6 @@ mod imp {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
                 vec![
                     glib::ParamSpecObject::new(
-                        "application",
-                        "application",
-                        "application",
-                        Application::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    ),
-                    glib::ParamSpecObject::new(
                         "selection-model",
                         "selection-model",
                         "selection-model",
@@ -543,9 +549,9 @@ mod imp {
                         glib::ParamFlags::READWRITE,
                     ),
                     glib::ParamSpecObject::new(
-                        "selected-view",
-                        "selected-view",
-                        "selected-view",
+                        "selected-page-child",
+                        "selected-page-child",
+                        "selected-page-child",
                         BrowserView::static_type(),
                         glib::ParamFlags::READWRITE,
                     ),
@@ -562,39 +568,25 @@ mod imp {
             pspec: &glib::ParamSpec,
         ) {
             match pspec.name() {
-                "application" => {
-                    if let Ok(application) = value.get::<Application>() {
-                        application.add_window(obj);
-                        self.application.replace(Some(application));
-                    }
-                }
                 "selection-model" => {
                     if let Ok(model) = value.get() {
                         self.selection_model.replace(Some(model));
                     }
                 }
-                "selected-view" => {
+                "selected-page-child" => {
                     if let Ok(view) = value.get::<BrowserView>() {
-                        view.imp()
-                            .filter_model
-                            .set_filter(Some(&gtk::CustomFilter::new(|obj| {
-                                let info = obj
-                                    .downcast_ref::<gio::FileInfo>()
-                                    .expect("The object needs to be of type `TodoObject`.");
-                                !info.display_name().starts_with(".")
-                            })));
                         self.selected_view.replace(Some(view));
                     }
                 }
+
                 _ => unimplemented!(),
             }
         }
 
         fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
             match pspec.name() {
-                "application" => self.application.borrow().to_value(),
                 "selection-model" => self.selection_model.borrow().to_value(),
-                "selected-view" => self.selected_view.borrow().to_value(),
+                "selected-page-child" => self.selected_view.borrow().to_value(),
                 _ => unimplemented!(),
             }
         }
