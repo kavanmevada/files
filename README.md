@@ -8,6 +8,6 @@ Access and organize files
 
 ### Useful links
 
-Homepage: https://github.com/endoxide/files
+Homepage: https://github.com/kavanmevada/files
 
-Report issues: https://github.com/endoxide/files/issues/
+Report issues: https://github.com/kavanmevada/files/issues/
